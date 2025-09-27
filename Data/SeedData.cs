@@ -61,7 +61,7 @@ namespace EC2_tipian.Data
                 }
 
                 // 3. CREAR INMUEBLES (tu seed original)
-                if (!context.Inmuebles.Any())
+                if (context.Inmuebles != null && !context.Inmuebles.Any())
                 {
                     var inmuebles = new Inmueble[]
                     {
@@ -83,7 +83,7 @@ namespace EC2_tipian.Data
             using (var context = new ApplicationDbContext(
                 serviceProvider.GetRequiredService<DbContextOptions<ApplicationDbContext>>()))
             {
-                if (context.Inmuebles.Any()) return;
+                if (context.Inmuebles == null || context.Inmuebles.Any()) return;
 
                 var inmuebles = new Inmueble[]
                 {
