@@ -2,6 +2,7 @@
 
 @{
     ViewData["Title"] = Model.Titulo;
+    bool tieneReservaActiva = ViewBag.TieneReservaActiva ?? false;
 }
 
 <div class="container mt-4">
@@ -24,6 +25,12 @@
                 <div class="card-header">
                     <h2 class="h4 mb-0">@Model.Titulo</h2>
                     <span class="badge bg-primary">@Model.Tipo</span>
+                    @if (tieneReservaActiva)
+                    {
+                        <span class="badge bg-warning ms-2">
+                            <i class="fas fa-lock"></i> RESERVADO
+                        </span>
+                    }
                 </div>
                 <div class="card-body">
                     <p class="text-muted">
@@ -76,7 +83,7 @@
                             <i class="fas fa-arrow-left"></i> Volver al Catálogo
                         </a>
                         
-                        <!-- Botón para agendar visita (Pregunta 3) -->
+                        <!-- Botón para agendar visita -->
                         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#visitaModal">
                             <i class="fas fa-calendar-check"></i> Agendar Visita
                         </button>
@@ -87,15 +94,57 @@
 
         <!-- Sidebar -->
         <div class="col-md-4">
+            <!-- Mensajes de éxito/error -->
+            @if (TempData["Success"] != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+                    <i class="fas fa-check-circle"></i> @TempData["Success"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+            @if (TempData["Error"] != null)
+            {
+                <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+                    <i class="fas fa-exclamation-circle"></i> @TempData["Error"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
             <div class="card sticky-top" style="top: 20px;">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0">💼 ¿Interesado en este inmueble?</h5>
                 </div>
                 <div class="card-body text-center">
                     <p>Contacta con uno de nuestros asesores</p>
+                    
                     <button class="btn btn-success w-100 mb-2" data-bs-toggle="modal" data-bs-target="#visitaModal">
                         <i class="fas fa-calendar-alt"></i> Agendar Visita
                     </button>
+                    
+                    @if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+                    {
+                        <form method="post" asp-action="Reservar" asp-route-id="@Model.Id" class="d-inline w-100">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-warning w-100 mb-2 @(tieneReservaActiva ? "disabled" : "")"
+                                    onclick="return confirm('¿Estás seguro de que deseas reservar este inmueble por 48 horas?')"
+                                    @(tieneReservaActiva ? "disabled" : "")>
+                                <i class="fas fa-lock"></i> 
+                                @(tieneReservaActiva ? "Ya Reservado" : "Reservar por 48h")
+                            </button>
+                            @if (tieneReservaActiva)
+                            {
+                                <small class="text-muted d-block">Este inmueble tiene una reserva activa</small>
+                            }
+                        </form>
+                    }
+                    else
+                    {
+                        <div class="border rounded p-3 mb-2 bg-light">
+                            <i class="fas fa-lock text-warning"></i>
+                            <small>Inicia sesión para reservar</small>
+                        </div>
+                    }
+                    
                     <button class="btn btn-outline-primary w-100">
                         <i class="fas fa-phone"></i> Llamar Ahora
                     </button>
@@ -116,19 +165,68 @@
     </div>
 </div>
 
-<!-- Modal para agendar visita (se completará en Pregunta 3) -->
+<!-- Modal para agendar visita -->
 <div class="modal fade" id="visitaModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Agendar Visita</h5>
+                <h5 class="modal-title">Agendar Visita - @Model.Titulo</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body text-center py-4">
-                <i class="fas fa-lock fa-3x text-warning mb-3"></i>
-                <h5>Función disponible próximamente</h5>
-                <p class="text-muted">Esta característica se habilitará en la siguiente fase del desarrollo.</p>
-            </div>
+            <form method="post" asp-action="AgendarVisita" asp-route-id="@Model.Id">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    @if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Fecha y Hora de Inicio *</label>
+                            <input type="datetime-local" name="fechaInicio" class="form-control" required 
+                                   min="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")"
+                                   value="@DateTime.Now.AddDays(1).ToString("yyyy-MM-ddT08:00")">
+                            <small class="text-muted">Selecciona fecha y hora de inicio de la visita</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fecha y Hora de Fin *</label>
+                            <input type="datetime-local" name="fechaFin" class="form-control" required 
+                                   min="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")"
+                                   value="@DateTime.Now.AddDays(1).ToString("yyyy-MM-ddT09:00")">
+                            <small class="text-muted">Selecciona fecha y hora de fin de la visita</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Notas adicionales</label>
+                            <textarea name="notas" class="form-control" rows="3" 
+                                      placeholder="Comentarios, requisitos especiales, número de personas..."></textarea>
+                        </div>
+                        <div class="alert alert-info">
+                            <small>
+                                <i class="fas fa-info-circle"></i> 
+                                <strong>Horario laboral:</strong> 8:00 - 19:00<br>
+                                <strong>Duración mínima:</strong> 30 minutos<br>
+                                <strong>No se permiten visitas solapadas</strong>
+                            </small>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <i class="fas fa-lock fa-3x text-warning mb-3"></i>
+                            <h5>Iniciar sesión requerido</h5>
+                            <p>Debes iniciar sesión para agendar una visita.</p>
+                            <a href="/Identity/Account/Login?returnUrl=@Url.Action("Detalle", "Inmuebles", new { id = Model.Id })" 
+                               class="btn btn-primary">Iniciar Sesión</a>
+                        </div>
+                    }
+                </div>
+                @if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+                {
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-calendar-check"></i> Confirmar Visita
+                        </button>
+                    </div>
+                }
+            </form>
         </div>
     </div>
 </div>
@@ -139,5 +237,40 @@
         .card { transition: transform 0.2s; }
         .card:hover { transform: translateY(-5px); }
         .badge { font-size: 0.8em; }
+        .disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
+}
+
+@section Scripts {
+    <script>
+        // Validación cliente-side para fechas de visita
+        document.addEventListener('DOMContentLoaded', function() {
+            const fechaInicioInput = document.querySelector('input[name="fechaInicio"]');
+            const fechaFinInput = document.querySelector('input[name="fechaFin"]');
+            
+            if (fechaInicioInput && fechaFinInput) {
+                fechaInicioInput.addEventListener('change', function() {
+                    // Establecer fecha mínima para fin como la fecha de inicio
+                    fechaFinInput.min = this.value;
+                    
+                    // Si la fecha fin es anterior a la nueva fecha inicio, actualizarla
+                    if (fechaFinInput.value && fechaFinInput.value < this.value) {
+                        // Agregar 1 hora a la fecha de inicio
+                        const fechaInicio = new Date(this.value);
+                        fechaInicio.setHours(fechaInicio.getHours() + 1);
+                        fechaFinInput.value = fechaInicio.toISOString().slice(0, 16);
+                    }
+                });
+            }
+            
+            // Auto-ocultar alertas después de 5 segundos
+            setTimeout(function() {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(alert => {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                });
+            }, 5000);
+        });
+    </script>
 }
