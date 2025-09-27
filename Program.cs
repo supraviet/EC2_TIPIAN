@@ -48,9 +48,16 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// RUTAS CORREGIDAS - Cambié "Innmuebles" por "Inmuebles"
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+    pattern: "{controller=Inmuebles}/{action=Catalogo}/{id?}"); // ← CORREGIDO AQUÍ
+
+app.MapControllerRoute(
+    name: "inmuebles",
+    pattern: "Inmuebles/{action=Catalogo}/{id?}",
+    defaults: new { controller = "Inmuebles" });
+
 app.MapRazorPages();
 
 // 3. SEED DATA - Ejecutar después de construir la app
