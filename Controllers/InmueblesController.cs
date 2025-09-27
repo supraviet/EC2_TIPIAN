@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using EC2_tipian.Models;
 using EC2_tipian.Data;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 
 namespace EC2_tipian.Controllers
 {
@@ -10,10 +12,12 @@ namespace EC2_tipian.Controllers
     public class InmueblesController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public InmueblesController(ApplicationDbContext context)
+        public InmueblesController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
         {
             _context = context;
+            _userManager = userManager;
         }
 
         // GET: /Inmuebles/Catalogo
@@ -88,6 +92,12 @@ namespace EC2_tipian.Controllers
             if (inmueble == null)
                 return NotFound();
 
+            // Verificar si hay reserva activa para este inmueble
+            var tieneReservaActiva = await _context.Reservas
+                .AnyAsync(r => r.InmuebleId == id && r.FechaExpiracion > DateTime.Now);
+
+            ViewBag.TieneReservaActiva = tieneReservaActiva;
+
             return View(inmueble);
         }
 
@@ -112,6 +122,125 @@ namespace EC2_tipian.Controllers
                 Dormitorios = filtros.Dormitorios,
                 Pagina = 1
             });
+        }
+
+        // POST: /Inmuebles/AgendarVisita/5
+        [HttpPost("AgendarVisita/{id:int}")]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AgendarVisita(int id, DateTime fechaInicio, DateTime fechaFin, string notas)
+        {
+            try
+            {
+                // Validaciones básicas
+                if (fechaInicio >= fechaFin)
+                {
+                    TempData["Error"] = "La fecha de inicio debe ser anterior a la fecha de fin.";
+                    return RedirectToAction("Detalle", new { id });
+                }
+
+                if (fechaInicio < DateTime.Now)
+                {
+                    TempData["Error"] = "No se pueden agendar visitas en fechas pasadas.";
+                    return RedirectToAction("Detalle", new { id });
+                }
+
+                // Obtener usuario actual
+                var usuario = await _userManager.GetUserAsync(User);
+                if (usuario == null) return Challenge();
+
+                // Validar horario laboral (8:00 - 19:00)
+                var horaInicio = fechaInicio.TimeOfDay;
+                var horaFin = fechaFin.TimeOfDay;
+                var horarioLaboralInicio = new TimeSpan(8, 0, 0);
+                var horarioLaboralFin = new TimeSpan(19, 0, 0);
+
+                if (horaInicio < horarioLaboralInicio || horaFin > horarioLaboralFin)
+                {
+                    TempData["Error"] = "Las visitas solo pueden agendarse en horario laboral (8:00 - 19:00).";
+                    return RedirectToAction("Detalle", new { id });
+                }
+
+                // Verificar si existe visita solapada (excluyendo las canceladas)
+                var visitaSolapada = await _context.Visitas
+                    .AnyAsync(v => v.InmuebleId == id && 
+                                  v.Estado != EstadoVisita.Cancelada &&
+                                  ((fechaInicio >= v.FechaInicio && fechaInicio < v.FechaFin) ||
+                                   (fechaFin > v.FechaInicio && fechaFin <= v.FechaFin) ||
+                                   (fechaInicio <= v.FechaInicio && fechaFin >= v.FechaFin)));
+
+                if (visitaSolapada)
+                {
+                    TempData["Error"] = "Ya existe una visita agendada para este inmueble en el horario seleccionado.";
+                    return RedirectToAction("Detalle", new { id });
+                }
+
+                // Crear la visita
+                var visita = new Visita
+                {
+                    InmuebleId = id,
+                    UsuarioId = usuario.Id,
+                    FechaInicio = fechaInicio,
+                    FechaFin = fechaFin,
+                    Notas = notas,
+                    Estado = EstadoVisita.Solicitada
+                };
+
+                _context.Visitas.Add(visita);
+                await _context.SaveChangesAsync();
+
+                TempData["Success"] = "✅ Visita agendada exitosamente. Te contactaremos para confirmar.";
+                return RedirectToAction("Detalle", new { id });
+            }
+            catch (Exception)
+            {
+                TempData["Error"] = "❌ Error al agendar la visita. Intente nuevamente.";
+                return RedirectToAction("Detalle", new { id });
+            }
+        }
+
+        // POST: /Inmuebles/Reservar/5
+        [HttpPost("Reservar/{id:int}")]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Reservar(int id)
+        {
+            try
+            {
+                // Obtener usuario actual
+                var usuario = await _userManager.GetUserAsync(User);
+                if (usuario == null) return Challenge();
+
+                // Verificar si ya existe reserva activa
+                var reservaActiva = await _context.Reservas
+                    .AnyAsync(r => r.InmuebleId == id && r.FechaExpiracion > DateTime.Now);
+
+                if (reservaActiva)
+                {
+                    TempData["Error"] = "❌ Este inmueble ya tiene una reserva activa.";
+                    return RedirectToAction("Detalle", new { id });
+                }
+
+                // Crear reserva por 48 horas
+                var reserva = new Reserva
+                {
+                    InmuebleId = id,
+                    UsuarioId = usuario.Id,
+                    FechaCreacion = DateTime.Now,
+                    FechaExpiracion = DateTime.Now.AddHours(48)
+                };
+
+                _context.Reservas.Add(reserva);
+                await _context.SaveChangesAsync();
+
+                TempData["Success"] = "✅ Inmueble reservado exitosamente por 48 horas.";
+                return RedirectToAction("Detalle", new { id });
+            }
+            catch (Exception)
+            {
+                TempData["Error"] = "❌ Error al realizar la reserva. Intente nuevamente.";
+                return RedirectToAction("Detalle", new { id });
+            }
         }
 
         private async Task LlenarDropdowns(CatalogoFiltrosModel model)

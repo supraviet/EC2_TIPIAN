@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("EC2_tipian")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+74de8540e07980c60bfacdd55829c0298587ce39")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+952d0104741b62eec8a8e86f4f2b3f28d8410fd7")]
 [assembly: System.Reflection.AssemblyProductAttribute("EC2_tipian")]
 [assembly: System.Reflection.AssemblyTitleAttribute("EC2_tipian")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
