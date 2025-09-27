@@ -26,6 +26,10 @@ namespace EC2_tipian.Controllers
         public async Task<IActionResult> Catalogo(CatalogoFiltrosModel filtros)
         {
             // Query base - solo inmuebles activos
+            if (_context.Inmuebles == null)
+            {
+                return View(filtros); // O puedes retornar un error apropiado
+            }
             var query = _context.Inmuebles.Where(i => i.Activo);
 
             // Aplicar filtros
@@ -86,6 +90,9 @@ namespace EC2_tipian.Controllers
             if (id == null)
                 return NotFound();
 
+            if (_context.Inmuebles == null)
+                return NotFound();
+
             var inmueble = await _context.Inmuebles
                 .FirstOrDefaultAsync(i => i.Id == id && i.Activo);
 
@@ -93,8 +100,12 @@ namespace EC2_tipian.Controllers
                 return NotFound();
 
             // Verificar si hay reserva activa para este inmueble
-            var tieneReservaActiva = await _context.Reservas
-                .AnyAsync(r => r.InmuebleId == id && r.FechaExpiracion > DateTime.Now);
+            bool tieneReservaActiva = false;
+            if (_context.Reservas != null)
+            {
+                tieneReservaActiva = await _context.Reservas
+                    .AnyAsync(r => r.InmuebleId == id && r.FechaExpiracion > DateTime.Now);
+            }
 
             ViewBag.TieneReservaActiva = tieneReservaActiva;
 
@@ -162,12 +173,16 @@ namespace EC2_tipian.Controllers
                 }
 
                 // Verificar si existe visita solapada (excluyendo las canceladas)
-                var visitaSolapada = await _context.Visitas
-                    .AnyAsync(v => v.InmuebleId == id && 
-                                  v.Estado != EstadoVisita.Cancelada &&
-                                  ((fechaInicio >= v.FechaInicio && fechaInicio < v.FechaFin) ||
-                                   (fechaFin > v.FechaInicio && fechaFin <= v.FechaFin) ||
-                                   (fechaInicio <= v.FechaInicio && fechaFin >= v.FechaFin)));
+                bool visitaSolapada = false;
+                if (_context.Visitas != null)
+                {
+                    visitaSolapada = await _context.Visitas
+                        .AnyAsync(v => v.InmuebleId == id && 
+                                       v.Estado != EstadoVisita.Cancelada &&
+                                       ((fechaInicio >= v.FechaInicio && fechaInicio < v.FechaFin) ||
+                                        (fechaFin > v.FechaInicio && fechaFin <= v.FechaFin) ||
+                                        (fechaInicio <= v.FechaInicio && fechaFin >= v.FechaFin)));
+                }
 
                 if (visitaSolapada)
                 {
@@ -186,8 +201,16 @@ namespace EC2_tipian.Controllers
                     Estado = EstadoVisita.Solicitada
                 };
 
-                _context.Visitas.Add(visita);
-                await _context.SaveChangesAsync();
+                if (_context.Visitas != null)
+                {
+                    _context.Visitas.Add(visita);
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    TempData["Error"] = "No se pudo agendar la visita porque la colección de visitas no está disponible.";
+                    return RedirectToAction("Detalle", new { id });
+                }
 
                 TempData["Success"] = "✅ Visita agendada exitosamente. Te contactaremos para confirmar.";
                 return RedirectToAction("Detalle", new { id });
@@ -212,8 +235,12 @@ namespace EC2_tipian.Controllers
                 if (usuario == null) return Challenge();
 
                 // Verificar si ya existe reserva activa
-                var reservaActiva = await _context.Reservas
-                    .AnyAsync(r => r.InmuebleId == id && r.FechaExpiracion > DateTime.Now);
+                bool reservaActiva = false;
+                if (_context.Reservas != null)
+                {
+                    reservaActiva = await _context.Reservas
+                        .AnyAsync(r => r.InmuebleId == id && r.FechaExpiracion > DateTime.Now);
+                }
 
                 if (reservaActiva)
                 {
@@ -230,10 +257,17 @@ namespace EC2_tipian.Controllers
                     FechaExpiracion = DateTime.Now.AddHours(48)
                 };
 
-                _context.Reservas.Add(reserva);
-                await _context.SaveChangesAsync();
+                if (_context.Reservas != null)
+                {
+                    _context.Reservas.Add(reserva);
+                    await _context.SaveChangesAsync();
 
-                TempData["Success"] = "✅ Inmueble reservado exitosamente por 48 horas.";
+                    TempData["Success"] = "✅ Inmueble reservado exitosamente por 48 horas.";
+                }
+                else
+                {
+                    TempData["Error"] = "No se pudo realizar la reserva porque la colección de reservas no está disponible.";
+                }
                 return RedirectToAction("Detalle", new { id });
             }
             catch (Exception)
@@ -246,12 +280,16 @@ namespace EC2_tipian.Controllers
         private async Task LlenarDropdowns(CatalogoFiltrosModel model)
         {
             // Ciudades únicas
-            var ciudades = await _context.Inmuebles
-                .Where(i => i.Activo)
-                .Select(i => i.Ciudad)
-                .Distinct()
-                .OrderBy(c => c)
-                .ToListAsync();
+            List<string> ciudades = new List<string>();
+            if (_context.Inmuebles != null)
+            {
+                ciudades = await _context.Inmuebles
+                    .Where(i => i.Activo)
+                    .Select(i => i.Ciudad)
+                    .Distinct()
+                    .OrderBy(c => c)
+                    .ToListAsync();
+            }
 
             model.Ciudades = ciudades.Select(c => new SelectListItem { Value = c, Text = c }).ToList();
             model.Ciudades.Insert(0, new SelectListItem { Value = "", Text = "Todas las ciudades" });
