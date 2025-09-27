@@ -15,17 +15,37 @@ if (string.IsNullOrEmpty(connectionString))
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(connectionString));
 
-// 2. Configuración de Identity
+// 2. ✅ CONFIGURACIÓN DE IDENTITY CORREGIDA
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options => 
 {
     options.SignIn.RequireConfirmedAccount = false;
-    options.Password.RequireDigit = true;
-    options.Password.RequiredLength = 6;
+    
+    // Configuración simplificada para pruebas
+    options.Password.RequireDigit = false;
+    options.Password.RequiredLength = 3;
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequireUppercase = false;
+    options.Password.RequireLowercase = false;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
+// .AddDefaultUI(); // Eliminado porque no está disponible en esta configuración
+
+// 3. Configuración de sesiones (para Pregunta 4)
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+    options.Cookie.Name = "Inmobiliaria.Session";
+});
+
+// 4. Configuración de Redis (para Pregunta 4)
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis");
+    options.InstanceName = "Inmobiliaria_";
+});
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
@@ -44,14 +64,17 @@ else
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// ✅ Orden CORRECTO de middlewares
 app.UseRouting();
+app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// RUTAS CORREGIDAS - Cambié "Innmuebles" por "Inmuebles"
+// RUTAS
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Inmuebles}/{action=Catalogo}/{id?}"); // ← CORREGIDO AQUÍ
+    pattern: "{controller=Inmuebles}/{action=Catalogo}/{id?}");
 
 app.MapControllerRoute(
     name: "inmuebles",
@@ -60,19 +83,18 @@ app.MapControllerRoute(
 
 app.MapRazorPages();
 
-// 3. SEED DATA - Ejecutar después de construir la app
+// 5. Seed data
 try
 {
     using (var scope = app.Services.CreateScope())
     {
         var services = scope.ServiceProvider;
         var context = services.GetRequiredService<ApplicationDbContext>();
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
         
-        // Asegurar que la base de datos esté creada
         context.Database.EnsureCreated();
-        
-        // Ejecutar seed data
-        SeedData.Initialize(services);
+        await SeedData.InitializeAsync(services, userManager, roleManager);
     }
 }
 catch (Exception ex)

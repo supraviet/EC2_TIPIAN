@@ -11,7 +11,7 @@ namespace EC2_tipian.Models
         public int InmuebleId { get; set; }
 
         [Required]
-        public string UsuarioId { get; set; } = string.Empty; // FK como string
+        public string UsuarioEmail  { get; set; } = string.Empty; // FK como string
 
         [Required]
         public DateTime FechaExpiracion { get; set; }

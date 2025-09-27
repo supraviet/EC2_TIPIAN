@@ -179,7 +179,7 @@ namespace EC2_tipian.Controllers
                 var visita = new Visita
                 {
                     InmuebleId = id,
-                    UsuarioId = usuario.Id,
+                    UsuarioEmail  = usuario.Id,
                     FechaInicio = fechaInicio,
                     FechaFin = fechaFin,
                     Notas = notas,
@@ -225,7 +225,7 @@ namespace EC2_tipian.Controllers
                 var reserva = new Reserva
                 {
                     InmuebleId = id,
-                    UsuarioId = usuario.Id,
+                    UsuarioEmail  = usuario.Id,
                     FechaCreacion = DateTime.Now,
                     FechaExpiracion = DateTime.Now.AddHours(48)
                 };
